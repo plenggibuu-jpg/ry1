@@ -31,7 +31,7 @@
             <div>
                 <h1 class="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
                     <i class="ph-fill ph-map-pin text-sky-600 text-3xl"></i>
-                    Dashboard สรุปเรื่องร้องเรียน (Real-time)
+                    Dashboard สรุปเรื่องร้องเรียน
                 </h1>
                 <p class="text-slate-500 mt-1 md:ml-10">พื้นที่จังหวัดระยอง เขต 1 สภาชุดที่ 27</p>
             </div>
@@ -160,11 +160,20 @@
             <!-- Data Table -->
             <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
                 <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-white gap-4">
-                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2 shrink-0">
                         <i class="ph-bold ph-list-dashes text-slate-500"></i>
-                        รายการแจ้งเหตุล่าสุด
+                        เรื่องร้องเรียน
                     </h3>
-                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto flex-1 md:justify-end">
+                        <!-- ช่องค้นหา -->
+                        <div class="relative w-full md:w-64">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="ph-bold ph-magnifying-glass text-slate-400"></i>
+                            </div>
+                            <input type="text" id="tableSearchInput" placeholder="ค้นหารหัส, ประเด็น, ผู้แจ้ง..." class="bg-slate-50 border border-slate-200 text-sm rounded-lg pl-9 pr-3 py-1.5 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 text-slate-600 w-full transition-colors">
+                        </div>
+
                         <!-- ตัวกรองสถานะ -->
                         <select id="tableStatusFilter" class="bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500 text-slate-600">
                             <option value="ทั้งหมด">สถานะ: ทั้งหมด</option>
@@ -178,11 +187,13 @@
                             <option value="ส่งต่อ">ส่งต่อ</option>
                             <option value="ติดต่อผู้ร้องไม่ได้/ปิดเคส">ติดต่อผู้ร้องไม่ได้/ปิดเคส</option>
                         </select>
+                        
                         <!-- ตัวกรองหมวดหมู่ -->
                         <select id="tableCategoryFilter" class="bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500 text-slate-600">
                             <option value="ทั้งหมด">หมวดหมู่: ทั้งหมด</option>
                         </select>
-                        <span id="tableCount" class="text-sm font-medium px-3 py-1 bg-sky-100 text-sky-700 rounded-full ml-auto md:ml-2">
+                        
+                        <span id="tableCount" class="text-sm font-medium px-3 py-1 bg-sky-100 text-sky-700 rounded-full shrink-0">
                             แสดง 0 รายการ
                         </span>
                     </div>
@@ -322,6 +333,7 @@
         let currentTableStatus = 'ทั้งหมด';
         let currentTableCategory = 'ทั้งหมด';
         let currentKpiFilter = 'all'; // เก็บค่าว่ากด KPI ตัวไหนอยู่
+        let currentSearchQuery = ''; // เก็บค่าคำค้นหา
         
         // Chart instances
         let barChartInstance = null;
@@ -518,7 +530,7 @@
         };
 
         const updateDashboard = () => {
-            // 1. กรองข้อมูล
+            // 1. กรองข้อมูลตามพื้นที่
             filteredData = currentFilter === 'ทั้งหมด' ? globalData : globalData.filter(d => d.subdistrict === currentFilter);
 
             // 2. อัปเดต Dropdown (ทำแค่ครั้งแรกหรือเมื่อข้อมูลเปลี่ยนทั้งหมด)
@@ -550,7 +562,7 @@
             document.getElementById('kpiCoord').innerText = countCoord; 
             document.getElementById('kpiResolved').innerText = countResolved;
 
-            // 4. อัปเดตตัวกรองตาราง
+            // 4. อัปเดตตัวกรองหมวดหมู่ตาราง
             const catSelectEl = document.getElementById('tableCategoryFilter');
             if (catSelectEl.options.length <= 1) {
                 const uniqueCategories = [...new Set(globalData.map(d => d.category).filter(Boolean))];
@@ -562,10 +574,20 @@
                 });
             }
 
-            // 5. กรองข้อมูลเฉพาะตารางตามตัวกรองที่เลือก (รวม KPI Filter ด้วย)
+            // 5. กรองข้อมูลเฉพาะตารางตามตัวกรองที่เลือก (รวม KPI Filter และ Search Query)
             const tableData = filteredData.filter(d => {
                 const matchStatus = currentTableStatus === 'ทั้งหมด' || d.status === currentTableStatus;
                 const matchCategory = currentTableCategory === 'ทั้งหมด' || d.category === currentTableCategory;
+                
+                // ตรวจสอบการค้นหา
+                let matchSearch = true;
+                if (currentSearchQuery) {
+                    const query = currentSearchQuery.toLowerCase();
+                    matchSearch = d.id.toLowerCase().includes(query) || 
+                                  d.desc.toLowerCase().includes(query) || 
+                                  d.reporter.toLowerCase().includes(query) ||
+                                  d.subdistrict.toLowerCase().includes(query);
+                }
                 
                 let matchKpi = true;
                 if (currentKpiFilter === 'pending') {
@@ -580,7 +602,7 @@
                     matchKpi = resolvedStatuses.includes(d.status);
                 }
 
-                return matchStatus && matchCategory && matchKpi;
+                return matchStatus && matchCategory && matchSearch && matchKpi;
             });
 
             // 6. อัปเดตตาราง
@@ -605,7 +627,7 @@
                         <td class="px-6 py-4 whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs border border-slate-200">${row.category}</span></td>
                         <td class="px-6 py-4">
                             <p class="font-medium text-slate-800">${row.desc}</p>
-                            ${row.rawDesc ? `<p class="text-xs text-slate-600 mt-1 whitespace-pre-wrap">${row.rawDesc}</p>` : ''}
+                            ${row.rawDesc ? `<p class="text-xs text-slate-600 mt-1 whitespace-pre-wrap line-clamp-2">${row.rawDesc}</p>` : ''}
                             ${row.reporter !== 'ไม่ระบุตัวตน' ? `<p class="text-[10px] text-sky-500 mt-1"><i class="ph-fill ph-user mr-1"></i>${row.reporter}</p>` : ''}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-slate-700">${row.subdistrict}</td>
@@ -1130,6 +1152,12 @@
 
         // --- Event Listeners ---
         document.getElementById('refreshBtn').addEventListener('click', fetchSheetData);
+
+        // Event Listener สำหรับช่องค้นหา
+        document.getElementById('tableSearchInput').addEventListener('input', (e) => {
+            currentSearchQuery = e.target.value;
+            updateDashboard();
+        });
 
         document.getElementById('filterSubdistrict').addEventListener('change', (e) => {
             currentFilter = e.target.value;
