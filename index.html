@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard ร้องเรียนระยอง เขต 1</title>
+    <!-- นำเข้า Tailwind CSS ผ่าน CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- นำเข้า Chart.js ผ่าน CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- นำเข้า Phosphor Icons ผ่าน CDN -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .stat-card { transition: all 0.2s ease-in-out; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+        /* ซ่อน scrollbar สำหรับตารางแต่ยังเลื่อนได้ */
+        .table-container::-webkit-scrollbar { height: 6px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+    <!-- นำเข้าฟอนต์ Sarabun -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-900 flex items-center gap-2">
+                    <i class="ph-fill ph-map-pin text-sky-600 text-3xl"></i>
+                    Dashboard สรุปเรื่องร้องเรียน (Real-time)
+                </h1>
+                <p class="text-slate-500 mt-1 md:ml-10">พื้นที่จังหวัดระยอง เขต 1 สภาชุดที่ 27</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <button onclick="openReportModal()" class="flex items-center gap-2 bg-sky-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-sky-700 transition-colors">
+                    <i class="ph-bold ph-file-pdf text-lg"></i>
+                    <span class="font-medium">สร้างรายงาน</span>
+                </button>
+                <button id="refreshBtn" class="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-sm border border-slate-200 text-slate-600 hover:text-sky-600 hover:border-sky-300 transition-colors">
+                    <i class="ph-bold ph-arrows-clockwise text-lg"></i>
+                    <span class="font-medium">อัปเดตข้อมูล</span>
+                </button>
+
+                <div class="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-slate-200 flex-1 md:flex-none">
+                    <i class="ph-bold ph-funnel text-slate-400"></i>
+                    <select id="filterSubdistrict" class="bg-transparent border-none outline-none text-sm font-medium text-slate-700 cursor-pointer w-full focus:ring-0">
+                        <option value="ทั้งหมด">ทุกพื้นที่ในเขต 1</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="flex flex-col items-center justify-center py-20">
+            <i class="ph-bold ph-spinner-gap text-sky-500 text-5xl animate-spin mb-4"></i>
+            <h2 class="text-xl font-semibold text-slate-700">กำลังดึงข้อมูลจาก Google Sheet...</h2>
+            <p class="text-slate-500 mt-2">รอสักครู่นะคะบอส 👩🏻‍💼</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="errorState" class="hidden flex-col items-center justify-center py-20 text-center">
+            <div class="bg-red-50 p-6 rounded-2xl border border-red-200 max-w-md w-full shadow-sm">
+                <i class="ph-fill ph-warning-circle text-red-500 text-5xl mx-auto mb-4 block"></i>
+                <h2 class="text-xl font-semibold text-red-700 mb-2">ไม่สามารถดึงข้อมูลได้</h2>
+                <p id="errorMessage" class="text-red-600 mb-6 text-sm">กรุณาตรวจสอบว่า Sheet ได้เปิดสิทธิ์เข้าถึงเป็นสาธารณะหรือไม่</p>
+            </div>
+        </div>
+
+        <!-- Main Content (Hidden by default until data loads) -->
+        <div id="mainContent" class="hidden">
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
+                <div id="card-all" onclick="filterByKpi('all')" class="stat-card ring-2 ring-sky-500 bg-slate-50 cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-sky-100 shrink-0">
+                        <i class="ph-fill ph-file-text text-sky-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">เรื่องทั้งหมด</p>
+                        <h4 id="kpiTotal" class="text-2xl md:text-3xl font-bold text-sky-600">-</h4>
+                    </div>
+                </div>
+                <div id="card-pending" onclick="filterByKpi('pending')" class="stat-card bg-white cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-yellow-100 shrink-0">
+                        <i class="ph-fill ph-warning-circle text-yellow-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">รอดำเนินการ</p>
+                        <h4 id="kpiPending" class="text-2xl md:text-3xl font-bold text-yellow-600">-</h4>
+                    </div>
+                </div>
+                <div id="card-contact" onclick="filterByKpi('contact')" class="stat-card bg-white cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-orange-100 shrink-0">
+                        <i class="ph-fill ph-phone-call text-orange-500 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">ติดต่อผู้ร้อง</p>
+                        <h4 id="kpiContact" class="text-2xl md:text-3xl font-bold text-orange-500">-</h4>
+                    </div>
+                </div>
+                <div id="card-field" onclick="filterByKpi('field')" class="stat-card bg-white cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-amber-100 shrink-0">
+                        <i class="ph-fill ph-map-pin-line text-amber-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">ลงพื้นที่</p>
+                        <h4 id="kpiField" class="text-2xl md:text-3xl font-bold text-amber-600">-</h4>
+                    </div>
+                </div>
+                <div id="card-coord" onclick="filterByKpi('coord')" class="stat-card bg-white cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-sky-100 shrink-0">
+                        <i class="ph-fill ph-paper-plane-tilt text-sky-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">ประสานหน่วยงาน</p>
+                        <h4 id="kpiCoord" class="text-2xl md:text-3xl font-bold text-sky-600">-</h4>
+                    </div>
+                </div>
+                <div id="card-resolved" onclick="filterByKpi('resolved')" class="stat-card bg-white cursor-pointer p-6 rounded-xl shadow-sm border border-slate-100 flex items-center gap-4 transition-all">
+                    <div class="p-4 rounded-full bg-emerald-100 shrink-0">
+                        <i class="ph-fill ph-check-circle text-emerald-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-[11px] md:text-sm font-medium text-slate-500 mb-1">เสร็จสิ้น</p>
+                        <h4 id="kpiResolved" class="text-2xl md:text-3xl font-bold text-emerald-600">-</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Bar Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 lg:col-span-2">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800">
+                        <i class="ph-bold ph-chart-bar text-slate-500"></i>
+                        สถิติแยกตามสถานะการดำเนินงาน <span id="barChartTitleSuffix" class="text-slate-500 text-sm font-normal"></span>
+                        <span class="text-xs font-normal text-sky-500 ml-2">(คลิกที่แท่งกราฟเพื่อกรองข้อมูล)</span>
+                    </h3>
+                    <div class="h-72 w-full">
+                        <canvas id="categoryBarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Pie Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
+                    <h3 class="text-lg font-semibold mb-4 text-slate-800 w-full text-left md:text-center">
+                        สัดส่วนเรื่องร้องเรียนตามพื้นที่
+                        <span class="text-xs font-normal text-sky-500 block md:inline mt-1 md:mt-0">(คลิกเพื่อกรอง)</span>
+                    </h3>
+                    <div class="h-56 w-full flex justify-center">
+                        <canvas id="subdistrictPieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                <div class="px-6 py-4 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center bg-white gap-4">
+                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <i class="ph-bold ph-list-dashes text-slate-500"></i>
+                        รายการแจ้งเหตุล่าสุด
+                    </h3>
+                    <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                        <!-- ตัวกรองสถานะ -->
+                        <select id="tableStatusFilter" class="bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500 text-slate-600">
+                            <option value="ทั้งหมด">สถานะ: ทั้งหมด</option>
+                            <option value="รอดำเนินการ">รอดำเนินการ</option>
+                            <option value="ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ">ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ</option>
+                            <option value="ติดต่อผู้ร้อง">ติดต่อผู้ร้อง</option>
+                            <option value="ลงพื้นที่">ลงพื้นที่</option>
+                            <option value="ประสานหน่วยงาน">ประสานหน่วยงาน</option>
+                            <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                            <option value="เสร็จสิ้น (จำหน่าย)">เสร็จสิ้น (จำหน่าย)</option>
+                            <option value="ส่งต่อ">ส่งต่อ</option>
+                            <option value="ติดต่อผู้ร้องไม่ได้/ปิดเคส">ติดต่อผู้ร้องไม่ได้/ปิดเคส</option>
+                        </select>
+                        <!-- ตัวกรองหมวดหมู่ -->
+                        <select id="tableCategoryFilter" class="bg-slate-50 border border-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-sky-500 text-slate-600">
+                            <option value="ทั้งหมด">หมวดหมู่: ทั้งหมด</option>
+                        </select>
+                        <span id="tableCount" class="text-sm font-medium px-3 py-1 bg-sky-100 text-sky-700 rounded-full ml-auto md:ml-2">
+                            แสดง 0 รายการ
+                        </span>
+                    </div>
+                </div>
+                <div class="table-container overflow-x-auto max-h-[500px] overflow-y-auto relative">
+                    <table class="w-full text-left text-sm min-w-[800px] border-collapse">
+                        <thead class="bg-slate-50 text-slate-600 sticky top-0 z-10 shadow-sm">
+                            <tr>
+                                <th class="px-6 py-3 font-semibold whitespace-nowrap bg-slate-50 border-b border-slate-200">รหัส</th>
+                                <th class="px-6 py-3 font-semibold whitespace-nowrap bg-slate-50 border-b border-slate-200">วันที่แจ้ง</th>
+                                <th class="px-6 py-3 font-semibold whitespace-nowrap bg-slate-50 border-b border-slate-200">หมวดหมู่</th>
+                                <th class="px-6 py-3 font-semibold w-1/3 bg-slate-50 border-b border-slate-200">ประเด็นร้องเรียน</th>
+                                <th class="px-6 py-3 font-semibold whitespace-nowrap bg-slate-50 border-b border-slate-200">พื้นที่</th>
+                                <th class="px-6 py-3 font-semibold whitespace-nowrap bg-slate-50 border-b border-slate-200">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-100 bg-white">
+                            <!-- Rows will be generated here -->
+                        </tbody>
+                    </table>
+                    <div id="tableEmptyState" class="hidden text-center py-12 text-slate-500 flex-col items-center bg-white">
+                        <i class="ph-fill ph-file-dashed text-5xl text-slate-300 mb-3 block"></i>
+                        <p>ไม่พบข้อมูลตามเงื่อนไขที่เลือก</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pop-up สำหรับดูรายละเอียด -->
+    <div id="detailModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-50 flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden transform transition-all">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="ph-fill ph-file-text text-sky-600"></i>
+                    รายละเอียดเรื่องร้องเรียน
+                </h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-red-500 transition-colors p-1"><i class="ph-bold ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <div><p class="text-xs text-slate-500 mb-1">รหัส</p><p id="modalId" class="font-bold text-sky-600">-</p></div>
+                    <div><p class="text-xs text-slate-500 mb-1">วันที่แจ้ง</p><p id="modalDate" class="font-medium text-slate-700">-</p></div>
+                    <div><p class="text-xs text-slate-500 mb-1">สถานะ</p><div id="modalStatus">-</div></div>
+                    <div><p class="text-xs text-slate-500 mb-1">หมวดหมู่</p><p id="modalCategory" class="font-medium text-slate-700">-</p></div>
+                    <div><p class="text-xs text-slate-500 mb-1">พื้นที่</p><p id="modalSubdistrict" class="font-medium text-slate-700">-</p></div>
+                    <div><p class="text-xs text-slate-500 mb-1">ผู้แจ้ง</p><p id="modalReporter" class="font-medium text-slate-700">-</p></div>
+                </div>
+
+                <!-- ส่วนเพิ่มเติม: ข้อมูลติดต่อ, แผนที่, รูปภาพ -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <!-- เบอร์โทรศัพท์ -->
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <p class="text-xs text-slate-500 mb-2">เบอร์ติดต่อ</p>
+                        <div id="modalPhoneContainer" class="flex items-center gap-2">
+                            <span id="modalPhone" class="font-medium text-slate-700">-</span>
+                        </div>
+                    </div>
+                    <!-- แผนที่ Google Maps -->
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                        <p class="text-xs text-slate-500 mb-2">พิกัด/สถานที่</p>
+                        <div id="modalLocationContainer" class="flex items-center gap-2">
+                            <span id="modalLocationText" class="font-medium text-slate-700 truncate block max-w-[150px]">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-sm font-semibold text-slate-700 mb-2">ประเด็นหลัก</p>
+                    <p id="modalTitle" class="text-base text-slate-800">-</p>
+                </div>
+                <div class="mb-6">
+                    <p class="text-sm font-semibold text-slate-700 mb-2">รายละเอียดเพิ่มเติม</p>
+                    <p id="modalDesc" class="text-sm text-slate-600 bg-white p-4 rounded-lg border border-slate-200 min-h-[80px] whitespace-pre-wrap">-</p>
+                </div>
+                
+                <!-- รูปถ่าย -->
+                <div id="modalImageSection" class="hidden mb-4">
+                    <p class="text-sm font-semibold text-slate-700 mb-2">รูปถ่ายแนบ</p>
+                    <div id="modalImageContainer" class="flex flex-wrap gap-2">
+                        <!-- รูปย่อจะถูกสร้างด้วย JS -->
+                    </div>
+                    <!-- ส่วนปุ่มลิงก์แยกด้านล่าง -->
+                    <div id="driveLinksContainer" class="flex flex-col gap-2 pt-2 mt-2 w-full"></div>
+                </div>
+
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 flex justify-end">
+                <button onclick="closeModal()" class="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium">ปิดหน้าต่าง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Pop-up สำหรับดูรูปเต็ม (Full Image Viewer) -->
+    <div id="imageViewerModal" class="hidden fixed inset-0 bg-black bg-opacity-90 z-[60] flex justify-center items-center p-4">
+        <button onclick="closeImageViewer()" class="absolute top-4 right-4 text-white hover:text-red-500 transition-colors p-2"><i class="ph-bold ph-x text-3xl"></i></button>
+        <img id="fullSizeImage" src="" alt="Full size" class="max-w-full max-h-[90vh] object-contain rounded-lg">
+    </div>
+
+    <!-- Modal สำหรับสร้างรายงานประจำเดือน -->
+    <div id="reportModal" class="hidden fixed inset-0 bg-slate-900 bg-opacity-50 z-[70] flex justify-center items-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="ph-fill ph-file-pdf text-sky-600"></i> สร้างรายงานประจำเดือน
+                </h3>
+                <button onclick="closeReportModal()" class="text-slate-400 hover:text-red-500 transition-colors p-1"><i class="ph-bold ph-x text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1 bg-slate-50">
+                <div class="flex items-center gap-4 mb-6 bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+                    <label class="font-bold text-slate-700"><i class="ph-fill ph-calendar mr-2"></i>เลือกเดือนที่ต้องการสรุป:</label>
+                    <select id="reportMonthSelect" class="bg-slate-50 border border-slate-300 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-sky-500 min-w-[200px]" onchange="generateReportPreview()">
+                        <!-- ตัวเลือกเดือนจะถูกใส่ผ่าน JS -->
+                    </select>
+                </div>
+                
+                <p class="text-sm text-slate-500 mb-2">ตัวอย่างรายงานที่จะพิมพ์:</p>
+                <div id="reportPreviewArea" class="border border-slate-200 rounded-lg p-8 bg-white min-h-[300px] shadow-sm">
+                    <!-- ข้อมูลรายงานจะถูกสร้างผ่าน JS -->
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-white">
+                <button onclick="closeReportModal()" class="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors font-medium">ยกเลิก</button>
+                <button onclick="printReport()" class="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium flex items-center gap-2">
+                    <i class="ph-bold ph-printer"></i> พิมพ์รายงาน / บันทึก PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- การตั้งค่าตัวแปร ---
+        const SHEET_ID = '1UeXNqkeYqgByOKhs0GmEBzxgya0F605hXFskdMsoHe4';
+        let globalData = [];
+        let filteredData = [];
+        let currentFilter = 'ทั้งหมด';
+        let currentTableStatus = 'ทั้งหมด';
+        let currentTableCategory = 'ทั้งหมด';
+        let currentKpiFilter = 'all'; // เก็บค่าว่ากด KPI ตัวไหนอยู่
+        
+        // Chart instances
+        let barChartInstance = null;
+        let pieChartInstance = null;
+        let reportStatusChart = null;
+        let reportCategoryChart = null;
+        let reportSubdistrictChart = null;
+
+        // สี
+        const chartColors = ['#0ea5e9', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#64748b', '#f43f5e', '#14b8a6', '#eab308'];
+        const resolvedStatuses = ['เสร็จสิ้น', 'เสร็จสิ้น (จำหน่าย)', 'ส่งต่อ', 'ติดต่อผู้ร้องไม่ได้/ปิดเคส'];
+
+        // --- ฟังก์ชันช่วยเหลือ (Helpers) ---
+
+        // จัดหมวดหมู่ปัญหา
+        const categorizeIssue = (text) => {
+            if (!text) return 'อื่นๆ';
+            if (text.match(/ไฟ|สว่าง|มืด|เสา/)) return 'ไฟฟ้าส่องสว่าง';
+            if (text.match(/ถนน|หลุม|ทาง|จราจร|รถ|แยก|อุบัติเหตุ/)) return 'ถนน/การจราจร';
+            if (text.match(/น้ำ|ประปา|ท่อ|ท่วม|คลอง/)) return 'น้ำประปา/ท่อระบายน้ำ';
+            if (text.match(/ขยะ|เหม็น|กลิ่น|มลพิษ|ฝุ่น|ควัน/)) return 'ขยะ/มลพิษ';
+            if (text.match(/หมา|สุนัข|สัตว์|แมว/)) return 'สัตว์จรจัด';
+            if (text.match(/เสียง|รบกวน|ดัง/)) return 'เสียงรบกวน';
+            return 'อื่นๆ';
+        };
+
+        // จัดกลุ่มสถานะ
+        const determineStatus = (statusText, noteText) => {
+            const text = (statusText || '').trim();
+            if (text === 'ติดต่อผู้ร้อง') return 'ติดต่อผู้ร้อง';
+            if (text === 'ลงพื้นที่') return 'ลงพื้นที่';
+            if (text === 'ประสานหน่วยงาน') return 'ประสานหน่วยงาน';
+            if (text === 'เสร็จสิ้น') return 'เสร็จสิ้น';
+            if (text === 'เสร็จสิ้น (จำหน่าย)') return 'เสร็จสิ้น (จำหน่าย)';
+            if (text === 'ส่งต่อ') return 'ส่งต่อ';
+            if (text === 'ติดต่อผู้ร้องไม่ได้/ปิดเคส') return 'ติดต่อผู้ร้องไม่ได้/ปิดเคส';
+            if (text === 'ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ') return 'ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ';
+            return 'รอดำเนินการ'; // สำหรับค่าว่าง หรือค่าอื่นๆ ที่ไม่ตรงเงื่อนไขด้านบน
+        };
+
+        // ฟังก์ชันช่วยกำหนดสีพื้นหลังแถวตามสถานะ
+        const getRowBgColorClass = (status) => {
+            switch (status) {
+                case 'ติดต่อผู้ร้อง': return 'bg-orange-50 hover:bg-orange-100'; // ส้มอ่อน
+                case 'ลงพื้นที่': return 'bg-orange-100 hover:bg-orange-200'; // ส้ม
+                case 'ประสานหน่วยงาน': return 'bg-sky-100 hover:bg-sky-200'; // ฟ้า
+                case 'เสร็จสิ้น':
+                case 'เสร็จสิ้น (จำหน่าย)': return 'bg-emerald-50 hover:bg-emerald-100'; // เขียวอ่อน
+                case 'ส่งต่อ':
+                case 'ติดต่อผู้ร้องไม่ได้/ปิดเคส': return 'bg-red-50 hover:bg-red-100'; // แดง
+                case 'ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ':
+                case 'รอดำเนินการ': return 'bg-yellow-50 hover:bg-yellow-100'; // เหลืองอ่อน (กลุ่มรอดำเนินการ)
+                default: return 'bg-white hover:bg-slate-50';
+            }
+        };
+
+        // ตัวแยก CSV
+        const parseCSV = (csvText) => {
+            const rows = [];
+            let quote = false;
+            let row = [], col = "";
+            for (let i = 0; i < csvText.length; i++) {
+                let cc = csvText[i], nc = csvText[i+1];
+                if (cc === '"' && quote && nc === '"') { col += cc; ++i; continue; }
+                if (cc === '"') { quote = !quote; continue; }
+                if (cc === ',' && !quote) { row.push(col.trim()); col = ""; continue; }
+                if (cc === '\n' && !quote) { row.push(col.trim()); rows.push(row); row = []; col = ""; continue; }
+                if (cc === '\r' && !quote) { continue; }
+                col += cc;
+            }
+            if (col !== "" || row.length > 0) { row.push(col.trim()); rows.push(row); }
+            return rows;
+        };
+
+        // สร้าง Badge สถานะ HTML
+        const createStatusBadge = (status) => {
+            let colorClasses = '';
+            switch (status) {
+                case 'ติดต่อผู้ร้อง': colorClasses = 'bg-orange-100 text-orange-800 border-orange-300'; break;
+                case 'ลงพื้นที่': colorClasses = 'bg-orange-200 text-orange-900 border-orange-400'; break;
+                case 'ประสานหน่วยงาน': colorClasses = 'bg-sky-100 text-sky-800 border-sky-300'; break;
+                case 'เสร็จสิ้น':
+                case 'เสร็จสิ้น (จำหน่าย)': colorClasses = 'bg-emerald-100 text-emerald-800 border-emerald-300'; break;
+                case 'ส่งต่อ':
+                case 'ติดต่อผู้ร้องไม่ได้/ปิดเคส': colorClasses = 'bg-red-100 text-red-800 border-red-300'; break;
+                case 'ติดต่อผู้ร้องไม่ได้/รอติดต่อซ้ำ':
+                case 'รอดำเนินการ': colorClasses = 'bg-yellow-100 text-yellow-800 border-yellow-300'; break;
+                default: colorClasses = 'bg-slate-100 text-slate-800 border-slate-300';
+            }
+            return `<span class="px-2 py-1 md:px-3 rounded-full text-[10px] md:text-xs font-medium border ${colorClasses} whitespace-nowrap">${status}</span>`;
+        };
+
+        // ฟังก์ชันเมื่อกดการ์ด KPI หรือ กราฟแท่งสถานะ
+        const filterByKpi = (kpiType) => {
+            // ถ้ายกเลิกการเลือก (คลิกซ้ำ)
+            if (currentKpiFilter === kpiType && kpiType !== 'all') {
+                kpiType = 'all';
+            }
+            currentKpiFilter = kpiType;
+            
+            // รีเซ็ต Style การ์ดทั้งหมด
+            const cards = ['all', 'pending', 'contact', 'field', 'coord', 'resolved'];
+            cards.forEach(c => {
+                const el = document.getElementById(`card-${c}`);
+                if (el) {
+                    el.classList.remove('ring-2', 'ring-sky-500', 'bg-slate-50');
+                    el.classList.add('bg-white');
+                }
+            });
+            
+            // ไฮไลต์การ์ดที่ถูกเลือก
+            const activeCard = document.getElementById(`card-${kpiType}`);
+            if (activeCard) {
+                activeCard.classList.remove('bg-white');
+                activeCard.classList.add('ring-2', 'ring-sky-500', 'bg-slate-50');
+            }
+            
+            updateDashboard();
+        };
+
+        // --- ฟังก์ชันหลัก ---
+
+        const fetchSheetData = async () => {
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('loadingState').classList.add('flex');
+            document.getElementById('errorState').classList.add('hidden');
+            document.getElementById('mainContent').classList.add('hidden');
+
+            try {
+                // อัปเดต: เปลี่ยนลิงก์ดึงข้อมูลเป็นแบบ Google Visualization API เพื่อเลี่ยงปัญหา CORS เมื่อเปิดไฟล์จากในเครื่อง
+                const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+                const response = await fetch(url);
+                
+                if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้ ตรวจสอบว่า Sheet เปิดสิทธิ์เป็น "ทุกคนที่มีลิงก์" (Anyone with the link can view) หรือยัง');
+                
+                const csvText = await response.text();
+                const rows = parseCSV(csvText);
+                
+                if (rows.length < 2) throw new Error('ไม่พบข้อมูลใน Sheet');
+
+                const headers = rows[0];
+                const parsedData = rows.slice(1).map(r => {
+                    const obj = {};
+                    headers.forEach((h, i) => obj[h] = r[i] || '');
+                    return obj;
+                }).filter(item => item['รหัสเรื่องร้องเรียน']);
+
+                // รายชื่อตำบลในเขต 1 ที่ถูกต้อง
+                const validZone1 = ['ห้วยโป่ง', 'มาบตาพุด', 'ทับมา', 'เนินพระ', 'น้ำคอก', 'ตาขวัญ', 'นาตาขวัญ', 'บ้านแลง', 'ตาขัน'];
+
+                globalData = parsedData.map(item => {
+                    const issueText = `${item['ประเด็นร้องเรียน']} ${item['รายละเอียดเรื่องร้องเรียน']}`;
+                    let subdistrict = item['ตำบล'] || 'ไม่ระบุ';
+                    
+                    if (subdistrict.startsWith('อื่นๆ:')) {
+                        subdistrict = 'อื่นๆ';
+                    } else {
+                        subdistrict = subdistrict.trim();
+                        if (!validZone1.includes(subdistrict) && subdistrict !== 'ไม่ระบุ') {
+                            subdistrict = 'อื่นๆ';
+                        }
+                    }
+
+                    return {
+                        id: item['รหัสเรื่องร้องเรียน'],
+                        date: item['เวลา']?.split(',')[0]?.split(' ')[0] || '-',
+                        category: categorizeIssue(issueText),
+                        subdistrict: subdistrict,
+                        status: determineStatus(item['สถานะ'], item['บันทึก']),
+                        desc: item['ประเด็นร้องเรียน'] || 'ไม่มีหัวข้อ',
+                        rawDesc: item['รายละเอียดเรื่องร้องเรียน'] || '',
+                        reporter: item['ชื่อ'] || 'ไม่ระบุตัวตน',
+                        phone: item['เบอร์โทร / ติดต่อ'] || '-',
+                        locationText: item['สถานที่เกิดเหตุ'] || 'ไม่ระบุ',
+                        mapUrl: item['แผนที่'] || '', 
+                        images: item['ภาพ/วีดีโอ'] ? item['ภาพ/วีดีโอ'].split(',') : [] 
+                    };
+                }).reverse(); // ใหม่ไปเก่า
+
+                updateDashboard();
+
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('loadingState').classList.remove('flex');
+                document.getElementById('mainContent').classList.remove('hidden');
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('loadingState').classList.add('hidden');
+                document.getElementById('loadingState').classList.remove('flex');
+                document.getElementById('errorState').classList.remove('hidden');
+                document.getElementById('errorState').classList.add('flex');
+                document.getElementById('errorMessage').innerText = err.message;
+            }
+        };
+
+        const updateDashboard = () => {
+            // 1. กรองข้อมูล
+            filteredData = currentFilter === 'ทั้งหมด' ? globalData : globalData.filter(d => d.subdistrict === currentFilter);
+
+            // 2. อัปเดต Dropdown (ทำแค่ครั้งแรกหรือเมื่อข้อมูลเปลี่ยนทั้งหมด)
+            const selectEl = document.getElementById('filterSubdistrict');
+            if (selectEl.options.length <= 1) { 
+                const uniqueSubdistricts = [...new Set(globalData.map(d => d.subdistrict).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+                uniqueSubdistricts.forEach(sd => {
+                    const option = document.createElement('option');
+                    option.value = sd;
+                    option.text = `พื้นที่: ${sd}`;
+                    selectEl.appendChild(option);
+                });
+            } else {
+                 selectEl.value = currentFilter; // อัปเดตค่าให้ตรงกับ filter ในกรณีที่ถูกเปลี่ยนจากการกดกราฟ
+            }
+
+            // 3. อัปเดต KPIs
+            document.getElementById('kpiTotal').innerText = filteredData.length;
+            
+            const countResolved = filteredData.filter(d => resolvedStatuses.includes(d.status)).length;
+            const countContact = filteredData.filter(d => d.status === 'ติดต่อผู้ร้อง').length;
+            const countField = filteredData.filter(d => d.status === 'ลงพื้นที่').length;
+            const countCoord = filteredData.filter(d => d.status === 'ประสานหน่วยงาน').length; 
+            const countPending = filteredData.length - countResolved - countContact - countField - countCoord;
+            
+            document.getElementById('kpiPending').innerText = countPending;
+            document.getElementById('kpiContact').innerText = countContact;
+            document.getElementById('kpiField').innerText = countField;
+            document.getElementById('kpiCoord').innerText = countCoord; 
+            document.getElementById('kpiResolved').innerText = countResolved;
+
+            // 4. อัปเดตตัวกรองตาราง
+            const catSelectEl = document.getElementById('tableCategoryFilter');
+            if (catSelectEl.options.length <= 1) {
+                const uniqueCategories = [...new Set(globalData.map(d => d.category).filter(Boolean))];
+                uniqueCategories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.text = `หมวดหมู่: ${cat}`;
+                    catSelectEl.appendChild(option);
+                });
+            }
+
+            // 5. กรองข้อมูลเฉพาะตารางตามตัวกรองที่เลือก (รวม KPI Filter ด้วย)
+            const tableData = filteredData.filter(d => {
+                const matchStatus = currentTableStatus === 'ทั้งหมด' || d.status === currentTableStatus;
+                const matchCategory = currentTableCategory === 'ทั้งหมด' || d.category === currentTableCategory;
+                
+                let matchKpi = true;
+                if (currentKpiFilter === 'pending') {
+                    matchKpi = !resolvedStatuses.includes(d.status) && d.status !== 'ติดต่อผู้ร้อง' && d.status !== 'ลงพื้นที่' && d.status !== 'ประสานหน่วยงาน';
+                } else if (currentKpiFilter === 'contact') {
+                    matchKpi = d.status === 'ติดต่อผู้ร้อง';
+                } else if (currentKpiFilter === 'field') {
+                    matchKpi = d.status === 'ลงพื้นที่';
+                } else if (currentKpiFilter === 'coord') {
+                    matchKpi = d.status === 'ประสานหน่วยงาน';
+                } else if (currentKpiFilter === 'resolved') {
+                    matchKpi = resolvedStatuses.includes(d.status);
+                }
+
+                return matchStatus && matchCategory && matchKpi;
+            });
+
+            // 6. อัปเดตตาราง
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('tableEmptyState');
+            tbody.innerHTML = '';
+            document.getElementById('tableCount').innerText = `แสดง ${tableData.length} รายการ`;
+
+            if (tableData.length === 0) {
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+                tableData.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.className = `${getRowBgColorClass(row.status)} transition-colors cursor-pointer group border-b border-white border-opacity-50`;
+                    tr.onclick = () => openModal(row.id);
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-medium text-sky-600 whitespace-nowrap group-hover:text-sky-700">${row.id}</td>
+                        <td class="px-6 py-4 text-slate-500 whitespace-nowrap">${row.date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap"><span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs border border-slate-200">${row.category}</span></td>
+                        <td class="px-6 py-4">
+                            <p class="font-medium text-slate-800">${row.desc}</p>
+                            ${row.rawDesc ? `<p class="text-xs text-slate-600 mt-1 whitespace-pre-wrap">${row.rawDesc}</p>` : ''}
+                            ${row.reporter !== 'ไม่ระบุตัวตน' ? `<p class="text-[10px] text-sky-500 mt-1"><i class="ph-fill ph-user mr-1"></i>${row.reporter}</p>` : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-slate-700">${row.subdistrict}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${createStatusBadge(row.status)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            // 7. เตรียมข้อมูลกราฟแท่ง (เปลี่ยนมาแสดงตาม Dashboard KPI และเป็นปุ่มกด)
+            document.getElementById('barChartTitleSuffix').innerText = currentFilter !== 'ทั้งหมด' ? `(${currentFilter})` : '';
+            
+            const barData = [
+                { id: 'pending', label: 'รอดำเนินการ', count: countPending, color: '#eab308' },
+                { id: 'contact', label: 'ติดต่อผู้ร้อง', count: countContact, color: '#f97316' },
+                { id: 'field', label: 'ลงพื้นที่', count: countField, color: '#d97706' },
+                { id: 'coord', label: 'ประสานหน่วยงาน', count: countCoord, color: '#0ea5e9' },
+                { id: 'resolved', label: 'เสร็จสิ้น', count: countResolved, color: '#10b981' }
+            ];
+
+            const barCtx = document.getElementById('categoryBarChart').getContext('2d');
+            if(barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(barCtx, {
+                type: 'bar',
+                data: {
+                    labels: barData.map(d => d.label),
+                    datasets: [{
+                        label: 'จำนวนเรื่อง',
+                        data: barData.map(d => d.count),
+                        backgroundColor: barData.map(d => currentKpiFilter === 'all' || currentKpiFilter === d.id ? d.color : '#e2e8f0'),
+                        borderRadius: 4,
+                        barPercentage: 0.6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    onHover: (event, chartElement) => {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const clickedId = barData[index].id;
+                            filterByKpi(clickedId);
+                        }
+                    },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { borderDash: [4, 4], color: '#e2e8f0' }, border: {display: false}, ticks: { stepSize: 1 } },
+                        x: { grid: { display: false }, border: {display: false} }
+                    }
+                }
+            });
+
+            // 8. เตรียมข้อมูลกราฟโดนัท (เป็นปุ่มกดตัวกรองพื้นที่)
+            const subdistrictCounts = {};
+            globalData.forEach(d => {
+                if(d.subdistrict && d.subdistrict !== 'ไม่ระบุ') {
+                    subdistrictCounts[d.subdistrict] = (subdistrictCounts[d.subdistrict] || 0) + 1;
+                }
+            });
+            const pieData = Object.keys(subdistrictCounts).map(k => ({ label: k, count: subdistrictCounts[k] })).sort((a,b) => b.count - a.count);
+
+            const pieCtx = document.getElementById('subdistrictPieChart').getContext('2d');
+            if(pieChartInstance) pieChartInstance.destroy();
+            pieChartInstance = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: pieData.map(d => d.label),
+                    datasets: [{
+                        data: pieData.map(d => d.count),
+                        backgroundColor: pieData.map((d, i) => currentFilter === 'ทั้งหมด' || currentFilter === d.label ? chartColors[i % chartColors.length] : '#f1f5f9'),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '65%',
+                    onHover: (event, chartElement) => {
+                        event.native.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+                    },
+                    onClick: (event, elements) => {
+                        if (elements.length > 0) {
+                            const index = elements[0].index;
+                            const clickedLabel = pieData[index].label;
+                            if (currentFilter === clickedLabel) {
+                                currentFilter = 'ทั้งหมด'; // คลิกซ้ำเพื่อยกเลิก
+                            } else {
+                                currentFilter = clickedLabel;
+                            }
+                            updateDashboard();
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 12, font: {family: 'Sarabun', size: 12} } }
+                    }
+                }
+            });
+        };
+
+        // --- ฟังก์ชันจัดการรายงานประจำเดือน ---
+        const openReportModal = () => {
+            const select = document.getElementById('reportMonthSelect');
+            select.innerHTML = '';
+            
+            // ดึงเดือนที่มีอยู่ในระบบ (รูปแบบ YYYY-MM)
+            const months = [...new Set(globalData.map(d => {
+                if(!d.date || d.date === '-') return null;
+                const parts = d.date.split(/[-/]/);
+                if (parts.length >= 3) {
+                    if (parts[0].length === 4) return `${parts[0]}-${parts[1]}`; // YYYY-MM
+                    if (parts[2].length === 4) return `${parts[2]}-${parts[1]}`; // DD/MM/YYYY -> YYYY-MM
+                }
+                return null;
+            }).filter(Boolean))].sort().reverse();
+
+            if (months.length === 0) {
+                 select.innerHTML = '<option value="">ไม่มีข้อมูล</option>';
+            } else {
+                 months.forEach(m => {
+                     const opt = document.createElement('option');
+                     opt.value = m;
+                     const [year, month] = m.split('-');
+                     const thaiMonths = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+                     opt.text = `${thaiMonths[parseInt(month)-1]} ${parseInt(year) < 2500 ? parseInt(year) + 543 : year}`; 
+                     select.appendChild(opt);
+                 });
+            }
+            generateReportPreview();
+            document.getElementById('reportModal').classList.remove('hidden');
+        };
+
+        const closeReportModal = () => document.getElementById('reportModal').classList.add('hidden');
+
+        const generateReportPreview = () => {
+             const monthVal = document.getElementById('reportMonthSelect').value;
+             const previewArea = document.getElementById('reportPreviewArea');
+             
+             if(!monthVal) {
+                 previewArea.innerHTML = '<p class="text-center text-slate-500 py-10">ไม่พบข้อมูลสำหรับสร้างรายงาน</p>';
+                 return;
+             }
+
+             // กรองข้อมูลเฉพาะเดือนที่เลือก
+             const reportData = globalData.filter(d => {
+                 const parts = d.date.split(/[-/]/);
+                 let dMonth = '';
+                 if (parts.length >= 3) {
+                    if (parts[0].length === 4) dMonth = `${parts[0]}-${parts[1]}`;
+                    if (parts[2].length === 4) dMonth = `${parts[2]}-${parts[1]}`;
+                 }
+                 return dMonth === monthVal;
+             });
+
+             const total = reportData.length;
+             const countResolved = reportData.filter(d => resolvedStatuses.includes(d.status)).length;
+             const countContact = reportData.filter(d => d.status === 'ติดต่อผู้ร้อง').length;
+             const countField = reportData.filter(d => d.status === 'ลงพื้นที่').length;
+             const countCoord = reportData.filter(d => d.status === 'ประสานหน่วยงาน').length; 
+             const countPending = total - countResolved - countContact - countField - countCoord;
+             
+             const monthName = document.getElementById('reportMonthSelect').options[document.getElementById('reportMonthSelect').selectedIndex].text;
+
+             // สร้างตารางรายละเอียด
+             let tableHtml = `
+             <table class="w-full text-left text-[11px] md:text-xs border-collapse mt-4">
+                 <thead>
+                     <tr class="bg-slate-200 text-slate-800">
+                         <th class="border border-slate-300 p-2 whitespace-nowrap w-[1%]">รหัส</th>
+                         <th class="border border-slate-300 p-2 whitespace-nowrap w-[1%]">วันที่แจ้ง</th>
+                         <th class="border border-slate-300 p-2 whitespace-nowrap w-[1%]">สถานะ</th>
+                         <th class="border border-slate-300 p-2 whitespace-nowrap w-[1%]">หมวดหมู่</th>
+                         <th class="border border-slate-300 p-2 whitespace-nowrap w-[1%]">พื้นที่</th>
+                         <th class="border border-slate-300 p-2">ประเด็นหลัก</th>
+                     </tr>
+                 </thead>
+                 <tbody>
+             `;
+             reportData.forEach(row => {
+                 tableHtml += `
+                     <tr class="${getRowBgColorClass(row.status)}">
+                         <td class="border border-slate-300 p-2 text-sky-600 font-medium whitespace-nowrap">${row.id}</td>
+                         <td class="border border-slate-300 p-2 whitespace-nowrap">${row.date}</td>
+                         <td class="border border-slate-300 p-2 whitespace-nowrap">${createStatusBadge(row.status)}</td>
+                         <td class="border border-slate-300 p-2 whitespace-nowrap">${row.category}</td>
+                         <td class="border border-slate-300 p-2 whitespace-nowrap">${row.subdistrict}</td>
+                         <td class="border border-slate-300 p-2">
+                             <p class="font-semibold text-slate-800">${row.desc}</p>
+                             ${row.rawDesc ? `<p class="text-[10px] text-slate-600 mt-1 whitespace-pre-wrap">${row.rawDesc}</p>` : ''}
+                         </td>
+                     </tr>
+                 `;
+             });
+             if(reportData.length === 0) tableHtml += `<tr><td colspan="6" class="border border-slate-300 p-4 text-center">ไม่มีข้อมูล</td></tr>`;
+             tableHtml += `</tbody></table>`;
+
+             let html = `
+                <div id="printContent">
+                    <div class="text-center mb-6 border-b-2 border-slate-800 pb-4">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-1">รายงานสรุปผลการดำเนินงานเรื่องร้องเรียน</h2>
+                        <h3 class="text-lg font-medium text-slate-700">พื้นที่เขต 1 สภาชุดที่ 27</h3>
+                        <p class="text-slate-600 mt-2">ประจำเดือน: <span class="font-bold text-sky-600">${monthName}</span></p>
+                    </div>
+                    
+                    <h4 class="font-bold text-slate-800 mb-3 text-sm md:text-base border-l-4 border-sky-500 pl-2">1. สรุปภาพรวม (Dashboard)</h4>
+                    <div class="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6 text-center">
+                        <div class="bg-slate-100 p-3 rounded-lg border border-slate-200"><p class="text-[10px] text-slate-600 mb-1">ทั้งหมด</p><p class="text-lg font-bold text-sky-600">${total}</p></div>
+                        <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200"><p class="text-[10px] text-slate-600 mb-1">รอดำเนินการ</p><p class="text-lg font-bold text-yellow-600">${countPending}</p></div>
+                        <div class="bg-orange-50 p-3 rounded-lg border border-orange-200"><p class="text-[10px] text-slate-600 mb-1">ติดต่อผู้ร้อง</p><p class="text-lg font-bold text-orange-500">${countContact}</p></div>
+                        <div class="bg-amber-50 p-3 rounded-lg border border-amber-200"><p class="text-[10px] text-slate-600 mb-1">ลงพื้นที่</p><p class="text-lg font-bold text-amber-600">${countField}</p></div>
+                        <div class="bg-sky-50 p-3 rounded-lg border border-sky-200"><p class="text-[10px] text-slate-600 mb-1">ประสานงาน</p><p class="text-lg font-bold text-sky-600">${countCoord}</p></div>
+                        <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200"><p class="text-[10px] text-slate-600 mb-1">เสร็จสิ้น</p><p class="text-lg font-bold text-emerald-600">${countResolved}</p></div>
+                    </div>
+
+                    <h4 class="font-bold text-slate-800 mb-3 text-sm md:text-base border-l-4 border-sky-500 pl-2">2. กราฟสถิติ</h4>
+                    
+                    <!-- กราฟที่ 1: สถานะ เต็มบรรทัด -->
+                    <div class="mb-4 border border-slate-200 rounded-lg p-3 bg-white text-center shadow-sm">
+                        <p class="text-[11px] font-bold mb-2 text-slate-700">2.1 สถานะการดำเนินงาน</p>
+                        <div class="h-56 relative"><canvas id="reportStatusCanvas"></canvas></div>
+                    </div>
+                    
+                    <!-- กราฟที่ 2 และ 3: แบ่งครึ่งบรรทัดเดียวกัน -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="border border-slate-200 rounded-lg p-3 bg-white text-center shadow-sm">
+                            <p class="text-[11px] font-bold mb-2 text-slate-700">2.2 หมวดหมู่ปัญหา</p>
+                            <div class="h-48 relative"><canvas id="reportCategoryCanvas"></canvas></div>
+                        </div>
+                        <div class="border border-slate-200 rounded-lg p-3 bg-white text-center shadow-sm">
+                            <p class="text-[11px] font-bold mb-2 text-slate-700">2.3 สรุปร้องเรียนรายพื้นที่</p>
+                            <div class="h-48 relative"><canvas id="reportSubdistrictCanvas"></canvas></div>
+                        </div>
+                    </div>
+
+                    <h4 class="font-bold text-slate-800 mb-3 text-sm md:text-base border-l-4 border-sky-500 pl-2" style="page-break-before: always;">3. รายละเอียดเรื่องร้องเรียนทั้งหมดในเดือนนี้</h4>
+                    <div class="bg-white overflow-x-auto shadow-sm border border-slate-200 rounded-lg p-1 mb-4">
+                        ${tableHtml}
+                    </div>
+                    
+                    <div class="text-right text-[10px] text-slate-500 mt-4">
+                        <p>พิมพ์เมื่อ: ${new Date().toLocaleDateString('th-TH')} เวลา ${new Date().toLocaleTimeString('th-TH')}</p>
+                    </div>
+                </div>
+             `;
+             previewArea.innerHTML = html;
+             
+             // วาดกราฟลงใน preview area แบบปิด Animation เพื่อให้พร้อมเซฟเป็นรูปภาพ
+             setTimeout(() => {
+                 renderReportCharts(reportData, countPending, countContact, countField, countCoord, countResolved);
+             }, 50);
+        };
+
+        const renderReportCharts = (reportData, pending, contact, field, coord, resolved) => {
+             // 2.1 สถานะ
+             const statusCtx = document.getElementById('reportStatusCanvas').getContext('2d');
+             if(reportStatusChart) reportStatusChart.destroy();
+             reportStatusChart = new Chart(statusCtx, {
+                 type: 'bar',
+                 data: {
+                     labels: ['รอดำเนินการ', 'ติดต่อ', 'ลงพื้นที่', 'ประสานฯ', 'เสร็จสิ้น'],
+                     datasets: [{
+                         data: [pending, contact, field, coord, resolved],
+                         backgroundColor: ['#eab308', '#f97316', '#d97706', '#0ea5e9', '#10b981'],
+                         borderRadius: 3
+                     }]
+                 },
+                 options: {
+                     responsive: true, maintainAspectRatio: false, animation: false,
+                     plugins: { legend: { display: false } },
+                     scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: {size: 9} } }, x: { ticks: {font: {size: 9}} } }
+                 }
+             });
+
+             // 2.2 หมวดหมู่
+             const catCounts = {};
+             reportData.forEach(d => { catCounts[d.category] = (catCounts[d.category] || 0) + 1; });
+             const cats = Object.keys(catCounts).map(k => ({label: k, count: catCounts[k]})).sort((a,b) => b.count - a.count);
+             
+             const catCtx = document.getElementById('reportCategoryCanvas').getContext('2d');
+             if(reportCategoryChart) reportCategoryChart.destroy();
+             reportCategoryChart = new Chart(catCtx, {
+                 type: 'bar',
+                 data: {
+                     labels: cats.map(c => c.label),
+                     datasets: [{
+                         data: cats.map(c => c.count),
+                         backgroundColor: '#8b5cf6',
+                         borderRadius: 3
+                     }]
+                 },
+                 options: {
+                     responsive: true, maintainAspectRatio: false, animation: false,
+                     plugins: { legend: { display: false } },
+                     scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: {size: 9} } }, x: { ticks: {font: {size: 9}, maxRotation: 45, minRotation: 45} } }
+                 }
+             });
+
+             // 2.3 พื้นที่
+             const subCounts = {};
+             reportData.forEach(d => { if(d.subdistrict !== 'ไม่ระบุ') subCounts[d.subdistrict] = (subCounts[d.subdistrict] || 0) + 1; });
+             const subs = Object.keys(subCounts).map(k => ({label: k, count: subCounts[k]})).sort((a,b) => b.count - a.count);
+
+             const subCtx = document.getElementById('reportSubdistrictCanvas').getContext('2d');
+             if(reportSubdistrictChart) reportSubdistrictChart.destroy();
+             reportSubdistrictChart = new Chart(subCtx, {
+                 type: 'doughnut',
+                 data: {
+                     labels: subs.map(c => c.label),
+                     datasets: [{
+                         data: subs.map(c => c.count),
+                         backgroundColor: chartColors,
+                         borderWidth: 1
+                     }]
+                 },
+                 options: {
+                     responsive: true, maintainAspectRatio: false, animation: false, cutout: '50%',
+                     plugins: { legend: { position: 'right', labels: { boxWidth: 8, font: {size: 9, family: 'Sarabun'} } } }
+                 }
+             });
+        };
+
+        const printReport = () => {
+             // โคลนเนื้อหาเพื่อเปลี่ยน Canvas เป็นรูปภาพก่อนพิมพ์
+             const printContentElement = document.getElementById('printContent').cloneNode(true);
+             
+             // ดึง DataURL จาก Canvas จริงมาใส่ใน Clone
+             const canvases = ['reportStatusCanvas', 'reportCategoryCanvas', 'reportSubdistrictCanvas'];
+             canvases.forEach(id => {
+                 const originalCanvas = document.getElementById(id);
+                 const clonedCanvas = printContentElement.querySelector(`#${id}`);
+                 if (originalCanvas && clonedCanvas) {
+                     const img = document.createElement('img');
+                     img.src = originalCanvas.toDataURL('image/png');
+                     img.className = 'w-full h-full object-contain mx-auto';
+                     clonedCanvas.parentNode.replaceChild(img, clonedCanvas);
+                 }
+             });
+
+             const printContent = printContentElement.innerHTML;
+             const printWindow = window.open('', '', 'height=800,width=1000');
+             printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="th">
+                <head>
+                    <meta charset="UTF-8">
+                    <title>พิมพ์รายงานสรุป</title>
+                    <script src="https://cdn.tailwindcss.com"><\/script>
+                    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+                    <style>
+                        body { font-family: 'Sarabun', sans-serif; background-color: white; color: #000; }
+                        @media print {
+                            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                            .break-before-page { page-break-before: always; }
+                        }
+                    </style>
+                </head>
+                <body class="p-8 max-w-5xl mx-auto">
+                    ${printContent}
+                    <script>
+                        setTimeout(() => { 
+                            window.print(); 
+                        }, 800);
+                    <\/script>
+                </body>
+                </html>
+             `);
+             printWindow.document.close();
+        };
+
+        // --- ฟังก์ชันจัดการ Modal (Pop-up) ---
+        const openModal = (id) => {
+            const data = globalData.find(d => d.id === id);
+            if (!data) return;
+            
+            document.getElementById('modalId').innerText = data.id;
+            document.getElementById('modalDate').innerText = data.date;
+            document.getElementById('modalCategory').innerText = data.category;
+            document.getElementById('modalSubdistrict').innerText = data.subdistrict;
+            document.getElementById('modalReporter').innerText = data.reporter;
+            document.getElementById('modalStatus').innerHTML = createStatusBadge(data.status);
+            document.getElementById('modalTitle').innerText = data.desc;
+            document.getElementById('modalDesc').innerText = data.rawDesc || 'ไม่มีรายละเอียดเพิ่มเติม';
+
+            const phoneContainer = document.getElementById('modalPhoneContainer');
+            const phoneText = document.getElementById('modalPhone');
+            phoneText.innerText = data.phone;
+            
+            const existingCallBtn = phoneContainer.querySelector('a');
+            if(existingCallBtn) existingCallBtn.remove();
+
+            if (data.phone && data.phone !== '-') {
+                const callBtn = document.createElement('a');
+                callBtn.href = `tel:${data.phone.replace(/[^0-9+]/g, '')}`; 
+                callBtn.className = "flex items-center justify-center p-2 bg-emerald-100 text-emerald-600 rounded-full hover:bg-emerald-200 transition-colors ml-auto";
+                callBtn.title = "โทรออก";
+                callBtn.innerHTML = '<i class="ph-fill ph-phone-call text-lg"></i>';
+                phoneContainer.appendChild(callBtn);
+            }
+
+            const locContainer = document.getElementById('modalLocationContainer');
+            const locText = document.getElementById('modalLocationText');
+            
+            const existingMapBtn = locContainer.querySelector('a');
+            if(existingMapBtn) existingMapBtn.remove();
+
+            let mapUrl = data.mapUrl;
+            
+            if (mapUrl && mapUrl.includes('http')) {
+                locText.innerText = data.locationText;
+                locText.title = data.locationText;
+
+                const mapBtn = document.createElement('a');
+                mapBtn.href = mapUrl.trim();
+                mapBtn.target = "_blank"; 
+                mapBtn.className = "flex items-center justify-center p-2 bg-sky-100 text-sky-600 rounded-full hover:bg-sky-200 transition-colors ml-auto shrink-0";
+                mapBtn.title = "เปิด Google Maps";
+                mapBtn.innerHTML = '<i class="ph-fill ph-map-trifold text-lg"></i>';
+                locContainer.appendChild(mapBtn);
+            } else {
+                locText.innerText = `(${data.locationText})`;
+                locText.title = data.locationText;
+            }
+
+            const imageSection = document.getElementById('modalImageSection');
+            const imageContainer = document.getElementById('modalImageContainer');
+            let driveLinksContainer = document.getElementById('driveLinksContainer');
+
+            imageContainer.innerHTML = ''; 
+            if(driveLinksContainer) driveLinksContainer.innerHTML = ''; 
+
+            if (data.images && data.images.length > 0) {
+                let hasValidImage = false;
+                data.images.forEach((imgUrl, index) => {
+                    const trimmedUrl = imgUrl.trim();
+                    if (trimmedUrl) {
+                        hasValidImage = true;
+                        const imgWrapper = document.createElement('div');
+                        imgWrapper.className = "w-24 h-24 rounded-lg border border-slate-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity flex-shrink-0 group relative bg-slate-100";
+                        
+                        let displayUrl = trimmedUrl;
+                        let fileId = '';
+                        
+                        // แยก File ID ออกมาจากลิงก์ของ Google Drive
+                        if(displayUrl.includes('drive.google.com')){
+                           const match1 = displayUrl.match(/d\/([^/]+)/);
+                           const match2 = displayUrl.match(/id=([^&]+)/);
+                           if(match1) fileId = match1[1];
+                           else if(match2) fileId = match2[1];
+                        }
+
+                        if(fileId) {
+                            // ใช้ทริคดึงรูป Thumbnail ของ Google Drive แทนการดึงไฟล์ตรงๆ เพื่อเลี่ยงการโดนบล็อก
+                            displayUrl = `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                        }
+
+                        // ส่วนรูป: ใส่ข้อความ "ไม่สามารถดึงรูปได้" ในกรณี error
+                        imgWrapper.innerHTML = `
+                            <img src="${displayUrl}" class="w-full h-full object-cover" alt="รูปแนบ" onerror="this.parentElement.innerHTML='<div class=\\'flex flex-col items-center justify-center h-full w-full bg-slate-100 text-slate-400 text-[10px] text-center p-1\\'><i class=\\'ph-bold ph-image-break text-lg mb-1\\'></i>ไม่สามารถดึงรูปได้</div>'">
+                            <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                                <i class="ph-bold ph-arrows-out text-white opacity-0 group-hover:opacity-100 text-xl"></i>
+                            </div>
+                        `;
+                        
+                        imgWrapper.onclick = () => openImageViewer(displayUrl, trimmedUrl);
+                        imageContainer.appendChild(imgWrapper);
+
+                        // ส่วนลิงก์ด้านล่าง: ใส่ปุ่ม "ดูรูปจากDrive"
+                        if (trimmedUrl.includes('drive.google.com') && driveLinksContainer) {
+                            const btn = document.createElement('a');
+                            btn.href = trimmedUrl;
+                            btn.target = "_blank";
+                            btn.className = "flex items-center justify-center gap-2 bg-slate-50 hover:bg-sky-50 text-slate-700 hover:text-sky-700 p-2 rounded-lg text-xs font-semibold border border-slate-200 transition-all";
+                            btn.innerHTML = `
+                                <i class="ph-fill ph-google-drive-logo text-lg text-sky-600"></i>
+                                ดูรูปจากDrive (รูปที่ ${index + 1})
+                            `;
+                            driveLinksContainer.appendChild(btn);
+                        }
+                    }
+                });
+
+                if (hasValidImage) {
+                    imageSection.classList.remove('hidden');
+                } else {
+                    imageSection.classList.add('hidden');
+                }
+            } else {
+                imageSection.classList.add('hidden');
+            }
+            
+            document.getElementById('detailModal').classList.remove('hidden');
+        };
+
+        const closeModal = () => document.getElementById('detailModal').classList.add('hidden');
+
+        const openImageViewer = (displayUrl, originalUrl) => {
+            const viewer = document.getElementById('imageViewerModal');
+            const fullImg = document.getElementById('fullSizeImage');
+            fullImg.src = displayUrl;
+            viewer.classList.remove('hidden');
+        };
+
+        const closeImageViewer = () => {
+            const viewer = document.getElementById('imageViewerModal');
+            const fullImg = document.getElementById('fullSizeImage');
+            fullImg.src = ''; 
+            viewer.classList.add('hidden');
+        };
+
+        document.getElementById('detailModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('detailModal')) closeModal();
+        });
+        document.getElementById('imageViewerModal').addEventListener('click', (e) => {
+             if (e.target === document.getElementById('imageViewerModal')) closeImageViewer();
+        });
+        document.getElementById('reportModal').addEventListener('click', (e) => {
+             if (e.target === document.getElementById('reportModal')) closeReportModal();
+        });
+
+        // --- Event Listeners ---
+        document.getElementById('refreshBtn').addEventListener('click', fetchSheetData);
+
+        document.getElementById('filterSubdistrict').addEventListener('change', (e) => {
+            currentFilter = e.target.value;
+            updateDashboard();
+        });
+
+        document.getElementById('tableStatusFilter').addEventListener('change', (e) => {
+            currentTableStatus = e.target.value;
+            updateDashboard();
+        });
+
+        document.getElementById('tableCategoryFilter').addEventListener('change', (e) => {
+            currentTableCategory = e.target.value;
+            updateDashboard();
+        });
+
+        document.addEventListener('DOMContentLoaded', fetchSheetData);
+
+    </script>
+</body>
+</html>
