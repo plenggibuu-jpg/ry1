@@ -281,7 +281,10 @@
                 </div>
 
             </div>
-            <div class="px-6 py-4 border-t border-slate-100 flex justify-end">
+            <div class="px-6 py-4 border-t border-slate-100 flex justify-end gap-3">
+                <button id="copyBtn" onclick="copyComplaintDetails()" class="px-6 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors font-medium flex items-center gap-2">
+                    <i class="ph-bold ph-copy"></i> คัดลอกข้อมูล
+                </button>
                 <button onclick="closeModal()" class="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium">ปิดหน้าต่าง</button>
             </div>
         </div>
@@ -1125,6 +1128,43 @@
         };
 
         const closeModal = () => document.getElementById('detailModal').classList.add('hidden');
+
+        const copyComplaintDetails = () => {
+            const id = document.getElementById('modalId').innerText;
+            const data = globalData.find(d => d.id === id);
+            if (!data) return;
+
+            // จัดรูปแบบข้อความตามแพทเทิร์นที่กำหนดใหม่
+            const copyText = `เรื่องร้องเรียน : ${data.desc} [ รหัส : ${data.id} ]\nชื่อผู้ร้อง : ${data.reporter} [ เบอร์ติดต่อ : ${data.phone} ]\nสถานที่เกิดเหตุ : ${data.locationText} [ ตำบล : ${data.subdistrict} ]\nพิกัด : ${data.mapUrl || '-'}\nรายละเอียด : ${data.rawDesc || '-'}`;
+
+            // สร้าง textarea ชั่วคราวเพื่อทำการคัดลอก (รองรับการใช้งานผ่าน iframe)
+            const textArea = document.createElement("textarea");
+            textArea.value = copyText;
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                
+                // เปลี่ยนสถานะปุ่มเพื่อแจ้งเตือนว่าคัดลอกสำเร็จ
+                const copyBtn = document.getElementById('copyBtn');
+                const originalHtml = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<i class="ph-bold ph-check"></i> คัดลอกแล้ว!';
+                copyBtn.classList.remove('bg-sky-600', 'hover:bg-sky-700');
+                copyBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+                
+                // คืนค่าปุ่มเดิมหลังจาก 2 วินาที
+                setTimeout(() => {
+                    copyBtn.innerHTML = originalHtml;
+                    copyBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+                    copyBtn.classList.add('bg-sky-600', 'hover:bg-sky-700');
+                }, 2000);
+            } catch (err) {
+                console.error('Copy failed', err);
+            }
+            
+            document.body.removeChild(textArea);
+        };
 
         const openImageViewer = (displayUrl, originalUrl) => {
             const viewer = document.getElementById('imageViewerModal');
